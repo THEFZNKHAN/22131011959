@@ -11,6 +11,7 @@
 <p align="center">
     <img src="./public/frontend.png" alt="Frontend UI" width="350" style="border-radius:8px; margin:10px;" />
     <img src="./public/log_console.png" alt="Network Console" width="350" style="border-radius:8px; margin:10px;" />
+    <img src="./public/postman-log.png" alt="Frontend UI" width="350" style="border-radius:8px; margin:10px;" />
 </p>
 
 ---
