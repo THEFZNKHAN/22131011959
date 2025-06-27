@@ -1,98 +1,180 @@
 import { useState } from "react";
 import { createShortUrl, ShortUrlResponse } from "../services/api";
-import { Link2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { log } from "../utils/logger";
+import { Box, TextField, Button, IconButton, Typography } from "@mui/material";
+import { Add, Remove } from "@mui/icons-material";
 
-export function ShortenUrl() {
-    const [url, setUrl] = useState("");
-    const [validity, setValidity] = useState(30);
-    const [shortcode, setShortcode] = useState("");
-    const [result, setResult] = useState<ShortUrlResponse | null>(null);
-    const [error, setError] = useState("");
+interface UrlInput {
+    url: string;
+    validity: number;
+    shortcode: string;
+}
 
-    const handleShorten = async () => {
-        try {
-            const data = await createShortUrl(
-                url,
-                validity,
-                shortcode || undefined
-            );
-            setResult(data);
-            setError("");
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Unexpected error");
-            setResult(null);
+export function ShortenUrl({
+    addShortcode,
+}: {
+    addShortcode: (shortcode: string) => void;
+}) {
+    const [urls, setUrls] = useState<UrlInput[]>([
+        { url: "", validity: 30, shortcode: "" },
+    ]);
+    const [results, setResults] = useState<(ShortUrlResponse | null)[]>([]);
+    const [errors, setErrors] = useState<string[]>([]);
+
+    const addUrlInput = () => {
+        if (urls.length < 5) {
+            setUrls([...urls, { url: "", validity: 30, shortcode: "" }]);
+            setErrors([...errors, ""]);
         }
     };
 
+    const removeUrlInput = (index: number) => {
+        setUrls(urls.filter((_, i) => i !== index));
+        setErrors(errors.filter((_, i) => i !== index));
+        setResults(results.filter((_, i) => i !== index));
+    };
+
+    const handleChange = (
+        index: number,
+        field: keyof UrlInput,
+        value: string | number
+    ) => {
+        const newUrls = [...urls];
+        newUrls[index][field] = value as never;
+        setUrls(newUrls);
+    };
+
+    const handleShorten = async () => {
+        const newResults: (ShortUrlResponse | null)[] = [];
+        const newErrors: string[] = [];
+        const promises = urls.map(async (urlInput, index) => {
+            try {
+                const data = await createShortUrl(
+                    urlInput.url,
+                    urlInput.validity,
+                    urlInput.shortcode || undefined
+                );
+                newResults[index] = data;
+                newErrors[index] = "";
+                const shortcode = data.shortLink.split("/").pop() || "";
+                addShortcode(shortcode);
+                log(
+                    "frontend",
+                    "info",
+                    "ShortenUrl",
+                    `Shortened URL to ${data.shortLink}`
+                );
+            } catch (err) {
+                newResults[index] = null;
+                newErrors[index] =
+                    err instanceof Error ? err.message : "Unexpected error";
+                log(
+                    "frontend",
+                    "error",
+                    "ShortenUrl",
+                    `Failed to shorten URL: ${newErrors[index]}`
+                );
+            }
+        });
+        await Promise.all(promises);
+        setResults(newResults);
+        setErrors(newErrors);
+    };
+
     return (
-        <motion.section
-            className="bg-white p-8 rounded-2xl shadow-xl"
-            whileHover={{ scale: 1.02 }}
-        >
-            <div className="flex items-center mb-6">
-                <Link2 className="text-blue-600 mr-2" size={24} />
-                <h2 className="text-2xl font-bold text-blue-800">
-                    Create a Short Link
-                </h2>
-            </div>
-
-            <div className="space-y-4">
-                <input
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="Paste your URL here"
-                    className="w-full px-4 py-3 rounded-lg border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <div className="flex space-x-4">
-                    <input
-                        type="number"
-                        value={validity}
+        <Box sx={{ bgcolor: "white", p: 4, borderRadius: 2, boxShadow: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <Typography variant="h6" fontWeight="bold" color="primary">
+                    Create Short Links
+                </Typography>
+            </Box>
+            {urls.map((urlInput, index) => (
+                <Box
+                    key={index}
+                    sx={{
+                        mb: 2,
+                        display: "flex",
+                        gap: 2,
+                        alignItems: "center",
+                    }}
+                >
+                    <TextField
+                        label="URL"
+                        value={urlInput.url}
                         onChange={(e) =>
-                            setValidity(Number(e.target.value) || 30)
+                            handleChange(index, "url", e.target.value)
                         }
-                        placeholder="Valid (min)"
-                        className="w-1/3 px-4 py-3 rounded-lg border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        fullWidth
+                        variant="outlined"
                     />
-                    <input
-                        value={shortcode}
-                        onChange={(e) => setShortcode(e.target.value)}
-                        placeholder="Custom code"
-                        className="flex-1 px-4 py-3 rounded-lg border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    <TextField
+                        label="Validity (min)"
+                        type="number"
+                        value={urlInput.validity}
+                        onChange={(e) =>
+                            handleChange(
+                                index,
+                                "validity",
+                                Number(e.target.value) || 30
+                            )
+                        }
+                        variant="outlined"
+                        sx={{ width: "150px" }}
                     />
-                </div>
-                <button
-                    onClick={handleShorten}
-                    className="w-full py-3 font-semibold rounded-lg bg-gradient-to-r from-blue-500 to-blue-700 text-white hover:opacity-90 visible"
-                >
-                    Shorten Now
-                </button>
-            </div>
-
-            {result && (
-                <motion.div
-                    className="mt-6 p-4 bg-blue-100 rounded-lg"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                >
-                    <p className="text-sm text-blue-800">
-                        Your link:
-                        <a
-                            href={result.shortLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline text-blue-600"
+                    <TextField
+                        label="Custom Shortcode (optional)"
+                        value={urlInput.shortcode}
+                        onChange={(e) =>
+                            handleChange(index, "shortcode", e.target.value)
+                        }
+                        variant-controls="outlined"
+                        sx={{ width: "200px" }}
+                    />
+                    {urls.length > 1 && (
+                        <IconButton
+                            onClick={() => removeUrlInput(index)}
+                            color="error"
                         >
-                            {result.shortLink}
-                        </a>
-                    </p>
-                    <p className="text-xs text-blue-500">
-                        Expires at: {new Date(result.expiry).toLocaleString()}
-                    </p>
-                </motion.div>
+                            <Remove />
+                        </IconButton>
+                    )}
+                    {results[index] && (
+                        <Box>
+                            <Typography>
+                                Short Link:{" "}
+                                <a
+                                    href={results[index]?.shortLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    {results[index]?.shortLink}
+                                </a>
+                            </Typography>
+                            <Typography variant="body2">
+                                Expires:{" "}
+                                {new Date(
+                                    results[index]?.expiry || ""
+                                ).toLocaleString()}
+                            </Typography>
+                        </Box>
+                    )}
+                    {errors[index] && (
+                        <Typography color="error">{errors[index]}</Typography>
+                    )}
+                </Box>
+            ))}
+            {urls.length < 5 && (
+                <Button
+                    startIcon={<Add />}
+                    onClick={addUrlInput}
+                    sx={{ mb: 2 }}
+                >
+                    Add Another URL
+                </Button>
             )}
-
-            {error && <p className="mt-4 text-red-500">{error}</p>}
-        </motion.section>
+            <Button variant="contained" onClick={handleShorten} fullWidth>
+                Shorten Now
+            </Button>
+        </Box>
     );
 }
